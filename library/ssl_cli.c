@@ -3350,6 +3350,7 @@ static int ssl_write_client_key_exchange( mbedtls_ssl_context *ssl )
         }
 #endif
 
+        MBEDTLS_SSL_DEBUG_MSG(1, ( "before mbedtls_ecdh_make_public" ));
         ret = mbedtls_ecdh_make_public( &ssl->handshake->ecdh_ctx,
                                 &content_len,
                                 &ssl->out_msg[header_len], 1000,
@@ -3363,6 +3364,7 @@ static int ssl_write_client_key_exchange( mbedtls_ssl_context *ssl )
 #endif
             return( ret );
         }
+        MBEDTLS_SSL_DEBUG_MSG(1, ( "after mbedtls_ecdh_make_public" ));
 
         MBEDTLS_SSL_DEBUG_ECDH( 3, &ssl->handshake->ecdh_ctx,
                                 MBEDTLS_DEBUG_ECDH_Q );
