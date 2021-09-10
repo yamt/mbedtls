@@ -3378,6 +3378,7 @@ ecdh_calc_secret:
         if( ssl->handshake->ecrs_enabled )
             content_len = ssl->handshake->ecrs_n;
 #endif
+        MBEDTLS_SSL_DEBUG_MSG(1, ( "before mbedtls_ecdh_calc_secret" ));
         if( ( ret = mbedtls_ecdh_calc_secret( &ssl->handshake->ecdh_ctx,
                                    &ssl->handshake->pmslen,
                                    ssl->handshake->premaster,
@@ -3391,6 +3392,7 @@ ecdh_calc_secret:
 #endif
             return( ret );
         }
+        MBEDTLS_SSL_DEBUG_MSG(1, ( "after mbedtls_ecdh_calc_secret" ));
 
         MBEDTLS_SSL_DEBUG_ECDH( 3, &ssl->handshake->ecdh_ctx,
                                 MBEDTLS_DEBUG_ECDH_Z );
@@ -3767,6 +3769,7 @@ sign:
         rs_ctx = &ssl->handshake->ecrs_ctx.pk;
 #endif
 
+    MBEDTLS_SSL_DEBUG_MSG( 1, ( "before mbedtls_pk_sign_restartable" ) );
     if( ( ret = mbedtls_pk_sign_restartable( mbedtls_ssl_own_key( ssl ),
                          md_alg, hash_start, hashlen,
                          ssl->out_msg + 6 + offset, &n,
@@ -3779,6 +3782,7 @@ sign:
 #endif
         return( ret );
     }
+    MBEDTLS_SSL_DEBUG_MSG( 1, ( "after mbedtls_pk_sign_restartable" ) );
 
     ssl->out_msg[4 + offset] = (unsigned char)( n >> 8 );
     ssl->out_msg[5 + offset] = (unsigned char)( n      );
