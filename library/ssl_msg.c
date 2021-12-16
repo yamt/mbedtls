@@ -5968,7 +5968,7 @@ void mbedtls_ssl_transform_free( mbedtls_ssl_transform *transform )
     inflateEnd( &transform->ctx_inflate );
 #endif
 
-    mbedtls_cipher_free( &transform->cipher_ctx_enc );
+    //mbedtls_cipher_free( &transform->cipher_ctx_enc );
     mbedtls_cipher_free( &transform->cipher_ctx_dec );
 
 #if defined(MBEDTLS_SSL_SOME_MODES_USE_MAC)
