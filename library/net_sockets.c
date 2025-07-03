@@ -67,9 +67,9 @@ static int wsa_init_done = 0;
 #include <arpa/inet.h>
 #include <sys/time.h>
 #include <unistd.h>
-#include <signal.h>
+//#include <signal.h>
 #include <fcntl.h>
-#include <netdb.h>
+//#include <netdb.h>
 #include <errno.h>
 
 #define IS_EINTR(ret) ((ret) == EINTR)
@@ -92,30 +92,6 @@ static int wsa_init_done = 0;
 #endif
 
 #include <stdint.h>
-
-/*
- * Prepare for using the sockets interface
- */
-static int net_prepare(void)
-{
-#if (defined(_WIN32) || defined(_WIN32_WCE)) && !defined(EFIX64) && \
-    !defined(EFI32)
-    WSADATA wsaData;
-
-    if (wsa_init_done == 0) {
-        if (WSAStartup(MAKEWORD(2, 0), &wsaData) != 0) {
-            return MBEDTLS_ERR_NET_SOCKET_FAILED;
-        }
-
-        wsa_init_done = 1;
-    }
-#else
-#if !defined(EFIX64) && !defined(EFI32)
-    signal(SIGPIPE, SIG_IGN);
-#endif
-#endif
-    return 0;
-}
 
 /*
  * Return 0 if the file descriptor is valid, an error otherwise.
@@ -158,45 +134,11 @@ void mbedtls_net_init(mbedtls_net_context *ctx)
 int mbedtls_net_connect(mbedtls_net_context *ctx, const char *host,
                         const char *port, int proto)
 {
-    int ret = MBEDTLS_ERR_ERROR_CORRUPTION_DETECTED;
-    struct addrinfo hints, *addr_list, *cur;
-
-    if ((ret = net_prepare()) != 0) {
-        return ret;
-    }
-
-    /* Do name resolution with both IPv6 and IPv4 */
-    memset(&hints, 0, sizeof(hints));
-    hints.ai_family = AF_UNSPEC;
-    hints.ai_socktype = proto == MBEDTLS_NET_PROTO_UDP ? SOCK_DGRAM : SOCK_STREAM;
-    hints.ai_protocol = proto == MBEDTLS_NET_PROTO_UDP ? IPPROTO_UDP : IPPROTO_TCP;
-
-    if (getaddrinfo(host, port, &hints, &addr_list) != 0) {
-        return MBEDTLS_ERR_NET_UNKNOWN_HOST;
-    }
-
-    /* Try the sockaddrs until a connection succeeds */
-    ret = MBEDTLS_ERR_NET_UNKNOWN_HOST;
-    for (cur = addr_list; cur != NULL; cur = cur->ai_next) {
-        ctx->fd = (int) socket(cur->ai_family, cur->ai_socktype,
-                               cur->ai_protocol);
-        if (ctx->fd < 0) {
-            ret = MBEDTLS_ERR_NET_SOCKET_FAILED;
-            continue;
-        }
-
-        if (connect(ctx->fd, cur->ai_addr, MSVC_INT_CAST cur->ai_addrlen) == 0) {
-            ret = 0;
-            break;
-        }
-
-        mbedtls_net_close(ctx);
-        ret = MBEDTLS_ERR_NET_CONNECT_FAILED;
-    }
-
-    freeaddrinfo(addr_list);
-
-    return ret;
+	(void)ctx;
+    (void)host;
+    (void)port;
+    (void)proto;
+	return MBEDTLS_ERR_NET_CONNECT_FAILED;
 }
 
 /*
@@ -204,68 +146,13 @@ int mbedtls_net_connect(mbedtls_net_context *ctx, const char *host,
  */
 int mbedtls_net_bind(mbedtls_net_context *ctx, const char *bind_ip, const char *port, int proto)
 {
-    int n, ret;
-    struct addrinfo hints, *addr_list, *cur;
-
-    if ((ret = net_prepare()) != 0) {
-        return ret;
+    (void)bind_ip;
+    (void)port;
+    if (proto == MBEDTLS_NET_PROTO_UDP) {
+        return MBEDTLS_ERR_NET_SOCKET_FAILED;
     }
-
-    /* Bind to IPv6 and/or IPv4, but only in the desired protocol */
-    memset(&hints, 0, sizeof(hints));
-    hints.ai_family = AF_UNSPEC;
-    hints.ai_socktype = proto == MBEDTLS_NET_PROTO_UDP ? SOCK_DGRAM : SOCK_STREAM;
-    hints.ai_protocol = proto == MBEDTLS_NET_PROTO_UDP ? IPPROTO_UDP : IPPROTO_TCP;
-    if (bind_ip == NULL) {
-        hints.ai_flags = AI_PASSIVE;
-    }
-
-    if (getaddrinfo(bind_ip, port, &hints, &addr_list) != 0) {
-        return MBEDTLS_ERR_NET_UNKNOWN_HOST;
-    }
-
-    /* Try the sockaddrs until a binding succeeds */
-    ret = MBEDTLS_ERR_NET_UNKNOWN_HOST;
-    for (cur = addr_list; cur != NULL; cur = cur->ai_next) {
-        ctx->fd = (int) socket(cur->ai_family, cur->ai_socktype,
-                               cur->ai_protocol);
-        if (ctx->fd < 0) {
-            ret = MBEDTLS_ERR_NET_SOCKET_FAILED;
-            continue;
-        }
-
-        n = 1;
-        if (setsockopt(ctx->fd, SOL_SOCKET, SO_REUSEADDR,
-                       (const char *) &n, sizeof(n)) != 0) {
-            mbedtls_net_close(ctx);
-            ret = MBEDTLS_ERR_NET_SOCKET_FAILED;
-            continue;
-        }
-
-        if (bind(ctx->fd, cur->ai_addr, MSVC_INT_CAST cur->ai_addrlen) != 0) {
-            mbedtls_net_close(ctx);
-            ret = MBEDTLS_ERR_NET_BIND_FAILED;
-            continue;
-        }
-
-        /* Listen only makes sense for TCP */
-        if (proto == MBEDTLS_NET_PROTO_TCP) {
-            if (listen(ctx->fd, MBEDTLS_NET_LISTEN_BACKLOG) != 0) {
-                mbedtls_net_close(ctx);
-                ret = MBEDTLS_ERR_NET_LISTEN_FAILED;
-                continue;
-            }
-        }
-
-        /* Bind was successful */
-        ret = 0;
-        break;
-    }
-
-    freeaddrinfo(addr_list);
-
-    return ret;
-
+    ctx->fd = 0;
+	return 0;
 }
 
 #if (defined(_WIN32) || defined(_WIN32_WCE)) && !defined(EFIX64) && \
@@ -345,19 +232,7 @@ int mbedtls_net_accept(mbedtls_net_context *bind_ctx,
         ret = client_ctx->fd = (int) accept(bind_ctx->fd,
                                             (struct sockaddr *) &client_addr, &n);
     } else {
-        /* UDP: wait for a message, but keep it in the queue */
-        char buf[1] = { 0 };
-
-        ret = (int) recvfrom(bind_ctx->fd, buf, sizeof(buf), MSG_PEEK,
-                             (struct sockaddr *) &client_addr, &n);
-
-#if defined(_WIN32)
-        if (ret == SOCKET_ERROR &&
-            WSAGetLastError() == WSAEMSGSIZE) {
-            /* We know buf is too small, thanks, just peeking here */
-            ret = 0;
-        }
-#endif
+        return MBEDTLS_ERR_NET_ACCEPT_FAILED;
     }
 
     if (ret < 0) {
@@ -371,29 +246,7 @@ int mbedtls_net_accept(mbedtls_net_context *bind_ctx,
     /* UDP: hijack the listening socket to communicate with the client,
      * then bind a new socket to accept new connections */
     if (type != SOCK_STREAM) {
-        struct sockaddr_storage local_addr;
-        int one = 1;
-
-        if (connect(bind_ctx->fd, (struct sockaddr *) &client_addr, n) != 0) {
-            return MBEDTLS_ERR_NET_ACCEPT_FAILED;
-        }
-
-        client_ctx->fd = bind_ctx->fd;
-        bind_ctx->fd   = -1; /* In case we exit early */
-
-        n = sizeof(struct sockaddr_storage);
-        if (getsockname(client_ctx->fd,
-                        (struct sockaddr *) &local_addr, &n) != 0 ||
-            (bind_ctx->fd = (int) socket(local_addr.ss_family,
-                                         SOCK_DGRAM, IPPROTO_UDP)) < 0 ||
-            setsockopt(bind_ctx->fd, SOL_SOCKET, SO_REUSEADDR,
-                       (const char *) &one, sizeof(one)) != 0) {
-            return MBEDTLS_ERR_NET_SOCKET_FAILED;
-        }
-
-        if (bind(bind_ctx->fd, (struct sockaddr *) &local_addr, n) != 0) {
-            return MBEDTLS_ERR_NET_BIND_FAILED;
-        }
+        return MBEDTLS_ERR_NET_ACCEPT_FAILED;
     }
 
     if (client_ip != NULL) {

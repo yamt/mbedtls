@@ -146,59 +146,18 @@ static int sysctl_arnd_wrapper(unsigned char *buf, size_t buflen)
 #endif /* __FreeBSD__ || __NetBSD__ */
 
 #include <stdio.h>
+#include <wasi/api.h>
 
 int mbedtls_platform_entropy_poll(void *data,
                                   unsigned char *output, size_t len, size_t *olen)
 {
-    FILE *file;
-    size_t read_len;
-    int ret = MBEDTLS_ERR_ERROR_CORRUPTION_DETECTED;
-    ((void) data);
-
-#if defined(HAVE_GETRANDOM)
-    ret = getrandom_wrapper(output, len, 0);
-    if (ret >= 0) {
-        *olen = (size_t) ret;
-        return 0;
-    } else if (errno != ENOSYS) {
-        return MBEDTLS_ERR_ENTROPY_SOURCE_FAILED;
-    }
-    /* Fall through if the system call isn't known. */
-#else
-    ((void) ret);
-#endif /* HAVE_GETRANDOM */
-
-#if defined(HAVE_SYSCTL_ARND)
-    ((void) file);
-    ((void) read_len);
-    if (sysctl_arnd_wrapper(output, len) == -1) {
-        return MBEDTLS_ERR_ENTROPY_SOURCE_FAILED;
+    (void)data;
+    int error = __wasi_random_get(output, len);
+    if (error != 0) {
+        return MBEDTLS_ERR_ERROR_CORRUPTION_DETECTED;
     }
     *olen = len;
     return 0;
-#else
-
-    *olen = 0;
-
-    file = fopen("/dev/urandom", "rb");
-    if (file == NULL) {
-        return MBEDTLS_ERR_ENTROPY_SOURCE_FAILED;
-    }
-
-    /* Ensure no stdio buffering of secrets, as such buffers cannot be wiped. */
-    mbedtls_setbuf(file, NULL);
-
-    read_len = fread(output, 1, len, file);
-    if (read_len != len) {
-        fclose(file);
-        return MBEDTLS_ERR_ENTROPY_SOURCE_FAILED;
-    }
-
-    fclose(file);
-    *olen = len;
-
-    return 0;
-#endif /* HAVE_SYSCTL_ARND */
 }
 #endif /* _WIN32 && !EFIX64 && !EFI32 */
 #endif /* !MBEDTLS_NO_PLATFORM_ENTROPY */
