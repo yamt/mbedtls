@@ -158,10 +158,6 @@ int mbedtls_net_bind(mbedtls_net_context *ctx, const char *bind_ip, const char *
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = proto == MBEDTLS_NET_PROTO_UDP ? SOCK_DGRAM : SOCK_STREAM;
     hints.ai_protocol = proto == MBEDTLS_NET_PROTO_UDP ? IPPROTO_UDP : IPPROTO_TCP;
-    if (bind_ip == NULL) {
-        hints.ai_flags = AI_PASSIVE;
-    }
-
     if (getaddrinfo(bind_ip, port, &hints, &addr_list) != 0) {
         return MBEDTLS_ERR_NET_UNKNOWN_HOST;
     }
