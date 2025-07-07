@@ -72,6 +72,10 @@ static int wsa_init_done = 0;
 //#include <netdb.h>
 #include <errno.h>
 
+#ifdef __wasi__
+#include <wasi_socket_ext.h>
+#endif
+
 #define IS_EINTR(ret) ((ret) == EINTR)
 #define SOCKET int
 
