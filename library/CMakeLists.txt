@@ -294,8 +294,13 @@ if(USE_STATIC_MBEDTLS_LIBRARY)
 
     add_library(${mbedtls_static_target} STATIC ${src_tls})
     set_target_properties(${mbedtls_static_target} PROPERTIES OUTPUT_NAME mbedtls)
+if(CMAKE_C_COMPILER_TARGET MATCHES "wasm")
+    # XXX blindly assume WAMR dialect of socket api
     find_package(wamr-wasi-socket REQUIRED)
     target_link_libraries(${mbedtls_static_target} PUBLIC wamr-wasi-socket ${libs} ${mbedx509_static_target})
+else()
+    target_link_libraries(${mbedtls_static_target} PUBLIC ${libs} ${mbedx509_static_target})
+endif()
 endif(USE_STATIC_MBEDTLS_LIBRARY)
 
 if(USE_SHARED_MBEDTLS_LIBRARY)
