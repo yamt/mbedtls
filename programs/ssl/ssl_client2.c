@@ -439,7 +439,7 @@ int main(void)
     "                        default: 0 (disabled)\n"       \
     "    reco_server_name=%%s  default: NULL\n"             \
     "    reco_delay=%%d       default: 0 milliseconds\n"         \
-    "    reco_mode=%%d        0: copy session, 1: serialize session, 2: no session reuse\n" \
+    "    reco_mode=%%d        0: copy session, 1: serialize session\n" \
     "                        default: 1\n"      \
     "    reconnect_hard=%%d   default: 0 (disabled)\n"      \
     USAGE_TICKETS                                           \
@@ -2478,7 +2478,7 @@ usage:
                 goto exit;
             }
 
-        } else if (opt.reco_mode == 0) {
+        } else {
             if ((ret = mbedtls_ssl_get_session(&ssl, &saved_session)) != 0) {
                 mbedtls_printf(" failed\n  ! mbedtls_ssl_get_session returned -0x%x\n\n",
                                (unsigned int) -ret);
@@ -2758,7 +2758,7 @@ send_request:
                          * a NewSessionTicket instead. */
                         mbedtls_printf(" got new session ticket ( %d ).\n",
                                        ticket_id++);
-                        if (opt.reconnect != 0 && opt.reco_mode != 2) {
+                        if (opt.reconnect != 0) {
                             mbedtls_printf("  . Saving session for reuse...");
                             fflush(stdout);
 
@@ -3118,12 +3118,10 @@ reconnect:
             }
         }
 
-        if (opt.reco_mode != 2) {
-            if ((ret = mbedtls_ssl_set_session(&ssl, &saved_session)) != 0) {
-                mbedtls_printf(" failed\n  ! mbedtls_ssl_set_session returned -0x%x\n\n",
-                               (unsigned int) -ret);
-                goto exit;
-            }
+        if ((ret = mbedtls_ssl_set_session(&ssl, &saved_session)) != 0) {
+            mbedtls_printf(" failed\n  ! mbedtls_ssl_set_session returned -0x%x\n\n",
+                           (unsigned int) -ret);
+            goto exit;
         }
 
 #if defined(MBEDTLS_X509_CRT_PARSE_C)
