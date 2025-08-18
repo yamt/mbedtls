@@ -67,9 +67,13 @@ static int wsa_init_done = 0;
 #include <arpa/inet.h>
 #include <sys/time.h>
 #include <unistd.h>
-//#include <signal.h>
+#if !defined(__wasi__)
+#include <signal.h>
+#endif
 #include <fcntl.h>
-//#include <netdb.h>
+#if !defined(__wasi__)
+#include <netdb.h>
+#endif
 #include <errno.h>
 
 #ifdef __wasi__
@@ -96,6 +100,30 @@ static int wsa_init_done = 0;
 #endif
 
 #include <stdint.h>
+
+/*
+ * Prepare for using the sockets interface
+ */
+static int net_prepare(void)
+{
+#if (defined(_WIN32) || defined(_WIN32_WCE)) && !defined(EFIX64) && \
+    !defined(EFI32)
+    WSADATA wsaData;
+
+    if (wsa_init_done == 0) {
+        if (WSAStartup(MAKEWORD(2, 0), &wsaData) != 0) {
+            return MBEDTLS_ERR_NET_SOCKET_FAILED;
+        }
+
+        wsa_init_done = 1;
+    }
+#else
+#if !defined(EFIX64) && !defined(EFI32) && !defined(__wasi__)
+    signal(SIGPIPE, SIG_IGN);
+#endif
+#endif
+    return 0;
+}
 
 /*
  * Return 0 if the file descriptor is valid, an error otherwise.
@@ -141,11 +169,17 @@ int mbedtls_net_connect(mbedtls_net_context *ctx, const char *host,
     int ret = MBEDTLS_ERR_ERROR_CORRUPTION_DETECTED;
     struct addrinfo hints, *addr_list, *cur;
 
+    if ((ret = net_prepare()) != 0) {
+        return ret;
+    }
+
     /* Do name resolution with both IPv6 and IPv4 */
     memset(&hints, 0, sizeof(hints));
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = proto == MBEDTLS_NET_PROTO_UDP ? SOCK_DGRAM : SOCK_STREAM;
-    //hints.ai_protocol = proto == MBEDTLS_NET_PROTO_UDP ? IPPROTO_UDP : IPPROTO_TCP;
+#if !defined(__wasi__)
+    hints.ai_protocol = proto == MBEDTLS_NET_PROTO_UDP ? IPPROTO_UDP : IPPROTO_TCP;
+#endif
 
     if (getaddrinfo(host, port, &hints, &addr_list) != 0) {
         return MBEDTLS_ERR_NET_UNKNOWN_HOST;
@@ -183,12 +217,23 @@ int mbedtls_net_bind(mbedtls_net_context *ctx, const char *bind_ip, const char *
     int n, ret;
     struct addrinfo hints, *addr_list, *cur;
 
+    if ((ret = net_prepare()) != 0) {
+        return ret;
+    }
+
     /* Bind to IPv6 and/or IPv4, but only in the desired protocol */
     memset(&hints, 0, sizeof(hints));
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = proto == MBEDTLS_NET_PROTO_UDP ? SOCK_DGRAM : SOCK_STREAM;
+#if !defined(__wasi__)
+    hints.ai_protocol = proto == MBEDTLS_NET_PROTO_UDP ? IPPROTO_UDP : IPPROTO_TCP;
+#endif
     if (bind_ip == NULL) {
+#if defined(__wasi__)
         bind_ip = "0.0.0.0";
+#else
+        hints.ai_flags = AI_PASSIVE;
+#endif
     }
 
     if (getaddrinfo(bind_ip, port, &hints, &addr_list) != 0) {
@@ -316,7 +361,23 @@ int mbedtls_net_accept(mbedtls_net_context *bind_ctx,
         ret = client_ctx->fd = (int) accept(bind_ctx->fd,
                                             (struct sockaddr *) &client_addr, &n);
     } else {
+#if defined(__wasi__)
         return MBEDTLS_ERR_NET_ACCEPT_FAILED;
+#else
+        /* UDP: wait for a message, but keep it in the queue */
+        char buf[1] = { 0 };
+
+        ret = (int) recvfrom(bind_ctx->fd, buf, sizeof(buf), MSG_PEEK,
+                             (struct sockaddr *) &client_addr, &n);
+
+#if defined(_WIN32)
+        if (ret == SOCKET_ERROR &&
+            WSAGetLastError() == WSAEMSGSIZE) {
+            /* We know buf is too small, thanks, just peeking here */
+            ret = 0;
+        }
+#endif
+#endif
     }
 
     if (ret < 0) {
@@ -330,7 +391,33 @@ int mbedtls_net_accept(mbedtls_net_context *bind_ctx,
     /* UDP: hijack the listening socket to communicate with the client,
      * then bind a new socket to accept new connections */
     if (type != SOCK_STREAM) {
+#if defined(__wasi__)
+        struct sockaddr_storage local_addr;
+        int one = 1;
+
+        if (connect(bind_ctx->fd, (struct sockaddr *) &client_addr, n) != 0) {
+            return MBEDTLS_ERR_NET_ACCEPT_FAILED;
+        }
+
+        client_ctx->fd = bind_ctx->fd;
+        bind_ctx->fd   = -1; /* In case we exit early */
+
+        n = sizeof(struct sockaddr_storage);
+        if (getsockname(client_ctx->fd,
+                        (struct sockaddr *) &local_addr, &n) != 0 ||
+            (bind_ctx->fd = (int) socket(local_addr.ss_family,
+                                         SOCK_DGRAM, IPPROTO_UDP)) < 0 ||
+            setsockopt(bind_ctx->fd, SOL_SOCKET, SO_REUSEADDR,
+                       (const char *) &one, sizeof(one)) != 0) {
+            return MBEDTLS_ERR_NET_SOCKET_FAILED;
+        }
+
+        if (bind(bind_ctx->fd, (struct sockaddr *) &local_addr, n) != 0) {
+            return MBEDTLS_ERR_NET_BIND_FAILED;
+        }
+#else
         return MBEDTLS_ERR_NET_ACCEPT_FAILED;
+#endif
     }
 
     if (client_ip != NULL) {
